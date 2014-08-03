@@ -1,3 +1,5 @@
+View slides online at http://nebupookins.github.io/static-type-checking
+
 These are a set of slides I've used to give a presentation about static type
 checking, design by contract, Liskov substitution principle, and related topics.
 
