@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Design by Contract and Liskov Subtitution Principle</title>
+<meta name="author" content="Oliver Wong">
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="css/reveal.min.css">
+<link rel="stylesheet" href="css/theme/beige.css" id="theme">
+<link rel="stylesheet" href="lib/css/zenburn.css"> <!-- For syntax highlighting -->
+<!-- If the query includes 'print-pdf', use the PDF print sheet -->
+<script>
+	document.write( '<link rel="stylesheet" href="css/print/' + ( window.location.search.match( /print-pdf/gi ) ? 'pdf' : 'paper' ) + '.css" type="text/css" media="print">' );
+</script>
+<!--[if lt IE 9]>
+<script src="lib/js/html5shiv.js"></script>
+<![endif]-->
+<style type="text/css">
+	.reveal cite {
+		font-size: 50%
+	}
+	.reveal {
+		color: hsl(0,0%,20%);
+	}
+	.reveal blockquote strong {
+		color: hsl(0,0%,0%);
+	}
+</style>
+</head>
+<body><div class="reveal"><div class="slides">
+<section>
+	<h1>Types, Classes</h1>
+	<h2>(Maybe even typeclasses?)</h2>
+	&mdash; &hellip; or &hellip; &mdash;
+	<h4>Design by Contract and the Liskov Substitution Principle</h2>
+	<p>
+		<small>Oliver Wong (<a href="mailto:olivwong@amazon.com">olivwong@</a>) &mdash; Amazon 2014</small>
+	</p>
+</section>
+
+<section>
+	<h2>Goals of the presentation:</h2>
+	<ul>
+		<li>(Convince you that) static type checking is awesome.</li>
+		<li>Show how to use the type system of languages like Java to your advantage.</li>
+		<li>Maybe expose you to ideas from lots of different programming languages?</li>
+	</ul>
+</section>
+
+<section>
+	<h1>Mars Climate Orbiter</h1>
+	<img class="stretch" width="2200" height="2000" src="media/Mars_Climate_Orbiter_2.jpg" />
+	<div>Launched on December 11th, 1998</div>
+</section>
+
+<section>
+	<img class="stretch" width="800" height="554" src="media/800px-Mars_Climate_Orbiter_-_mishap_diagram.png" />
+</section>
+
+<section>
+	<h2>Disintegrated in upper atmosphere</h2>
+	<h2 class="fragment">$125 million</h2>
+</section>
+
+<section>
+	<blockquote>
+		&ldquo;People sometimes make errors. The problem here was not the error, it was the failure of NASA's systems engineering, and the checks and balances in our processes to detect the error. That's why we lost the spacecraft.&rdquo;
+	</blockquote>
+	<cite>Dr. Edward Weiler, NASA's Associate Administrator for Space Science</cite>
+</section>
+
+<section>
+	<section>
+		<h2>The Mars Climate Orbiter Bug</h2>
+		(Reenactment)
+
+		<pre><code class="scala" data-trim>
+def getImpulse(): double {
+  //...
+}
+
+def updateThrusters(impulse: double) {
+  //...
+}
+
+updateThrusters(getImpulse());
+		</code></pre>
+	</section>
+	<section>
+		<pre><code class="scala" data-trim>
+/**
+ * ...
+ * @return the impulse in pound * seconds.
+ */
+def getImpulse(): double {
+  //...
+}
+
+/**
+ * ...
+ * @param impulse the impulse in newton * seconds.
+ */
+def updateThrusters(impulse: double) {
+  //...
+}
+
+updateThrusters(getImpulse());
+		</code></pre>
+	</section>
+	<section>
+		<pre><code class="scala" data-trim>
+/**
+ * ...
+ * @return the impulse in pound * seconds.
+ */
+def getImpulse(): PoundSecond {
+  //...
+}
+
+/**
+ * ...
+ * @param impulse the impulse in newton * seconds.
+ */
+def updateThrusters(impulse: NewtonSecond) {
+  //...
+}
+
+updateThrusters(getImpulse()); //Compile error
+		</code></pre>
+	</section>
+	<section>
+		<pre><code class="scala" data-trim>
+def getImpulse(): Impulse {
+  //...
+  return new PoundSecond();
+}
+
+def updateThrusters(impulse: Impulse) {
+  var x = Impulse.getNewtonSecond();
+  //...
+}
+
+updateThrusters(getImpulse()); //Autoconversion via polymorphism
+		</code></pre>
+	</section>
+	<section>
+		Fortress:
+		<pre><code class="no-highlight">
+v : &#x211D; m/s = (3 meters + 4 meters )/5 seconds (* OK *)
+v : &#x211D; m/s = (3 meters + 4 seconds)/5 seconds (* type error *)
+v : &#x211D; m/s = (3 meters + 4 meters )/5         (* type error *)
+		</code></pre>
+		<cite>http://www.eecis.udel.edu/~cavazos/cisc879-spring2008/papers/fortress.pdf</cite>
+	</section>
+	<section>
+		<h2>Units Specification JSR-108 &amp; JSR-275</h2>
+	</section>
+</section>
+
+<section>
+	<h2>Claim:</h2>
+	<p>Bugs happen when a programmer expects a piece of code to do something, but the code does something else.</p>
+</section>
+
+<section>
+	<blockquote style="color: hsl(0,0%,60%)">
+		&ldquo;People sometimes make errors. The problem here was not the error, it was the failure of NASA's <strong>systems engineering</strong>, and the <strong>checks and balances in our processes to detect the error</strong>. That's why we lost the spacecraft.&rdquo;
+	</blockquote>
+	<cite>Dr. Edward Weiler, NASA's Associate Administrator for Space Science</cite>
+</section>
+
+<section>
+	<section>
+		<h3>Automate the check and balances in our process:</h3>
+		<h3>Have the computer check the program</h3>
+	</section>
+	<section>
+		Code:
+		<pre><code class="java">
+public ; class void } 3&lt;null>
+		</code></pre>
+		<div>&nbsp;</div>
+		<h3 class="fragment">Not grammatical</h3>
+		<p class="fragment">No idea what you're trying to say.</p>
+	</section>
+	<section>
+		Code:
+		<pre><code class="java">
+int foo = (int) "Hello";
+		</code></pre>
+		<div>&nbsp;</div>
+		<h3 class="fragment">Type error</h3>
+		<p class="fragment">
+			I know what you're trying to do, but I'm not gonna let you do it because it looks like a bug.
+		</p>
+	</section>
+</section>
+
+<section>
+	<h2>What are type systems?</h2>
+	<blockquote>
+		A type system is a collection of rules that assign a property called a type to the various constructs [&hellip;] a computer program is composed of.
+		<span  class="fragment" data-fragment-index="1">The main purpose of a type system is to <span class="fragment highlight-red" data-fragment-index="3">reduce bugs</span> in computer programs</span>
+		<span  class="fragment" data-fragment-index="2"><span class="fragment highlight-red" data-fragment-index="3">by defining interfaces between different parts of a computer program</span>, and then checking that the parts have been connected in a consistent way.</span>
+	</blockquote>
+	<cite>http://en.wikipedia.org/wiki/Type_system</cite>
+</section>
+
+<section>
+	<p>I expect the code to do something:</p>
+	<pre><code class="language-scala" data-trim>
+def executeAction(user) {
+  //...
+}
+val user = User.findById(userId);
+executeAction(user);
+	</code></pre>
+	<div class="fragment">
+	<p>But the code does something else:</p>
+	<pre><code class="language-scala" data-trim>
+/**
+ * user: the id of user making the request.
+ */
+def executeAction(user: Int) {
+  //...
+}
+val user = User.findById(userId);
+executeAction(user); //BUG
+	</code></pre>
+	</div>
+</section>
+
+<section>
+	<h2>What are type systems?</h2>
+	<blockquote>
+		A type system is a set of types [&hellip;] along with the rules that govern whether or not a program is legal with respect to [those] types.
+	</blockquote>
+	<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+</section>
+
+<section>
+	<blockquote>
+		The rules in a given type system allows some programs and disallows other programs. 
+		<span class="fragment">For example, unlike assembly language, one cannot write a program in Java that grabs a random word from memory and treats it as if it were an integer.</span>
+	</blockquote>
+	<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+</section>
+
+<section>
+	<section>
+		<blockquote>
+			Thus, every type system represents a tradeoff between expressiveness and safety.
+		</blockquote>
+		<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+		<div class="fragment" style="width: 50%; float: left;">
+			<ul>
+				<li>Reject all programs! (e.g. HQ9+)</li>
+				<li>Guaranteed no bugs ever in production (unless there's a bug in the compiler)</li>
+				<li>Don't trust the (human) programmers</li>
+			</ul>
+		</div>
+		<div class="fragment" style="width: 50%; float: right;">
+			<ul>
+				<li>Accept all programs! (e.g. machine code)</li>
+				<li>Lets you do things the compiler is unsure is possible</li>
+				<li>Fully trust the (human) programmers</li>
+			</ul>
+		</div>
+	</section>
+	<section>
+		<h2>Less extreme example &mdash; Java:</h2>
+		<ul>
+			<li>Guarantees right number of parameters are passed in a method invocation</li>
+			<li>Don't trust the programmers to perform pointer arithmetic</li>
+			<li>Condition of an if statement <em>must</em> be <code>boolean</code></li>
+			<li>Checked exceptions <em>must</em> be caught or declared as thrown.</li>
+		</ul>
+	</section>
+</section>
+
+<section>
+	<p>Choosing a language is implicitly choosing a type system.</p>
+	<small class="fragment">(We'll get back to this later).</small>
+</section>
+
+<section>
+	<blockquote style="color: hsl(0,0%,60%)">
+		A type system is a collection of rules that assign a property called a <strong>type</strong>&hellip;
+	</blockquote>
+	<cite>http://en.wikipedia.org/wiki/Type_system</cite>
+	<blockquote style="color: hsl(0,0%,60%)">
+		A type system is a set of <strong>types</strong> [&hellip;] along with the rules&hellip;
+	</blockquote>
+	<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+</section>
+
+<section>
+	<section>
+		<blockquote>
+			Definition: a <strong>type</strong> is a set of values.
+		</blockquote>
+		<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+		<div class="fragment">
+			<blockquote>A type is a set of values&hellip; and the set of operations allowed on those values.</blockquote>
+			<cite>me</cite>
+		</div>
+		<div><small class="fragment">(We'll also get back to this later).</small></div>
+	</section>
+	<section>
+		<h2>Intuition:</h2>
+		<div style="width: 50%; float: left;">
+		<pre><code class="language-java" data-trim>
+class Foo {
+}
+
+class Bar extends Foo {
+  public void frobulate();
+}
+		</code></pre>
+		<pre class="fragment" data-fragment-index="1"><code class="language-java">Foo f = new Foo();</code></pre>
+		<pre class="fragment" data-fragment-index="2"><code class="language-java">Bar b = new Bar();</code></pre>
+		</div>
+		<svg width="400" height="400" style="width: 50%; float: right;">
+			<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+			<circle cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+			<text x="100" y="150" font-size="60" fill="black">Foo</text>
+			<text x="200" y="300" font-size="60" fill="black">Bar</text>
+			<text x="100" y="250" font-size="40" fill="red" class="fragment" data-fragment-index="1">f</text>
+			<text x="250" y="250" font-size="40" fill="red" class="fragment" data-fragment-index="2">b</text>
+		</svg>
+	</section>
+</section>
+
+<section>
+	<h3>Static type checking vs Static analysis?</h3>
+	<p class="fragment" data-fragment-index="1">The distinction is not important for this talk.</p>
+	<p class="fragment" data-fragment-index="2">Types are <strong>sets of values</strong>, &there4; <span class="fragment highlight-red" data-fragment-index="4">if</span> you completely specify the types of your program, you <strong>completely specify the allowed values</strong> that variables can have, that methods can take as input, etc.</p>
+	<p class="fragment" data-fragment-index="3">In other words, you are completely specifying all possible states the program can have while it is running, and thus <strong>all possible behavior</strong> it can exhibit.</p>
+</section>
+
+<section>
+	<h2>Criticisms of Static Type Checking</h2>
+</section>
+
+<section>
+	<section>
+		<blockquote>
+			Static typing fanatics try to make us believe that &ldquo;well-typed programs cannot go wrong&rdquo;. While this certainly sounds impressive, it is a rather vacuous statement. [&hellip;] [Static type checking] is necessarily only partially sound and incomplete. This means that programs can still go wrong because of properties that are not tracked by the type-checker.
+		</blockquote>
+	<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+		<h3>Gödel's (First) Incompleteness Theorem</h3>
+		<blockquote>
+			Any effectively generated theory capable of expressing elementary arithmetic cannot be both consistent and complete.
+		</blockquote>
+		<cite>http://en.wikipedia.org/wiki/G%C3%B6del's_incompleteness_theorems</cite>
+		<p class="fragment">(Also: Halting Problem, Rice's Theorem, etc.)</p>
+	</section>
+</section>
+
+<section>
+	<blockquote>
+		<p>When programmers say &ldquo;I need [&hellip;] static typing&rdquo;, they really mean [&hellip;] &ldquo;I want contracts&rdquo;</p>
+		<p>Static typing provides a false sense of safety, [&hellip;] even if a program does not contain any static type-errors, this does not imply that you will not get any unwanted runtime errors.</p>
+	</blockquote>
+	<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+</section>
+
+<section>
+	<blockquote>
+		<span class="fragment highlight-red" data-fragment-index="1">Current type-checkers</span> basically only track the types of expressions and make sure you do not assign a variable with a value of an incompatible type, that the arguments to primitive operations are of the right type (but not that the actual operation succeeds), and that the receiver of a method call can be resolved statically (but not that the actual call succeeds).</p>
+	</blockquote>
+	<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	<small class="fragment" data-fragment-index="1">(No date on PDF, but includes citations from 2004)</small>
+</section>
+
+<section>
+	<section>
+		<blockquote>
+			<p>However in general programmers want to express more advanced contracts about their code. For example, an invariant that the value of one variable is always less than the value of another, a precondition that an argument to a method call is within a certain range, or a postcondition that the result of a method call satisfies some condition.</p>
+		</blockquote>
+		<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+		<img src="media/determined-challenge-accepted-l.png" width="1500" height="1175" class="stretch"/>
+	</section>
+</section>
+
+<section>
+	<section>
+		<blockquote style="color: hsl(0,0%,60%)">
+			<p>However in general programmers want to express more advanced contracts about their code. For example, an invariant that <strong>the value of one variable is always less than the value of another</strong>, a precondition that an argument to a method call is within a certain range, or a postcondition that the result of a method call satisfies some condition.</p>
+		</blockquote>
+		<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+		<h3>Possible via Dependent Types</h3>
+		<div class="fragment">
+			<blockquote>
+				<p>A dependent type is a type that depends on a value.</p>
+				<div class="fragment">
+					<p>[&hellip;]</p>
+					<p>Two common examples of dependent types are dependent functions and dependent pairs. [&hellip;] A dependent pair may have a second value that depends on the first. It can be used to encode a pair of integers where the second one is greater than the first.</p>
+				</div>
+			</blockquote>
+			<cite>http://en.wikipedia.org/wiki/Dependent_type</cite>
+		</div>
+	</section>
+	<section>
+		<h2>
+			Dependent Types &rArr;
+			<span class="fragment">Agda</span><span class="fragment">,
+			Coq</span><span class="fragment">, ... <span class="fragment">Java?!</span></h2>
+
+	</section>
+	<section>
+		<h2>You can encode the natural numbers in the Java type system</h2>
+		<small>Thanks, Peano!</small>
+		<div>Real, honest to goodness, Java:</div>
+		<pre><code class="language-java" data-trim>
+abstract class Nat&lt;Me extends Nat&gt; {
+  Succ&lt;Me&gt; next() { return new Succ&lt;Me&gt;(); }
+}
+class Zero extends Nat&lt;Zero&gt; { }
+class Succ&lt;Prev extends Nat&gt; extends Nat&lt;Succ&lt;Prev&gt;&gt; { }
+		</code></pre>
+
+		<p class="fragment">Note that you &ldquo;pass in&rdquo; the &ldquo;current&rdquo; value to <code>Nat</code>, but the "previous" value to <code>Succ</code></p>
+
+		<ul>
+			<li class="fragment">Five &sube; Nat&lt;Five&gt;</li>
+			<li class="fragment">
+				Five &sube; Succ&lt;Four&gt;
+				<span class="fragment">&sube; Nat&lt;Succ&lt;Four&gt;&gt;</span>
+			</li>
+		</ul>
+	</section>
+
+	<section>
+		Real, honest to goodness, Java:
+		<pre><code class="language-java" data-trim>
+static &lt;N extends Nat&gt; void acceptsConsecutive(N first, Succ&lt;N&gt; second) {
+  System.out.println("Yup, they're consecutive allright.");
+}
+
+//...
+
+Zero zero = new Zero();
+Succ&lt;Zero&gt; one = zero.next();
+Succ&lt;Succ&lt;Zero&gt;&gt; two = one.next();
+Succ&lt;Succ&lt;Succ&lt;Zero&gt;&gt;&gt; three = two.next();
+
+//acceptsConsecutive(zero, zero); //compile error
+acceptsConsecutive(zero, one);
+//acceptsConsecutive(zero, two); //compile error
+//acceptsConsecutive(zero, three); //compile error
+
+//acceptsConsecutive(one, zero); //compile error
+//acceptsConsecutive(one, one); //compile error
+acceptsConsecutive(one, two);
+//acceptsConsecutive(one, three); //compile error
+
+//acceptsConsecutive(two, zero); //compile error
+//acceptsConsecutive(two, one); //compile error
+//acceptsConsecutive(two, two); //compile error
+acceptsConsecutive(two, three);
+		</code></pre>
+	</section>
+</section>
+
+<section>
+	<section>
+		<blockquote style="color: hsl(0,0%,60%)">
+			<p>However in general programmers want to express more advanced contracts about their code. For example, an invariant that the value of one variable is always less than the value of another, a precondition that <strong>an argument to a method call is within a certain range</strong>, or a postcondition that the result of a method call satisfies some condition.</p>
+		</blockquote>
+		<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+		<h2>&ldquo;An argument to a method call is within a certain range&rdquo;</h2>
+		<svg width="400" height="400" style="width: 50%; float: right;">
+			<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+			<circle cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+			<text x="100" y="150" font-size="60" fill="black">Foo</text>
+			<text x="200" y="300" font-size="60" fill="black">Bar</text>
+		</svg>
+		<p>Presumably this range is a subset of some larger type (e.g. only integers between 10&nbsp;and&nbsp;20).</p>
+		<p>Therefore, you can use subtyping to express this.</p>
+	</section>
+</section>
+
+<section>
+	<section>
+		<blockquote style="color: hsl(0,0%,60%)">
+			<p>However in general programmers want to express more advanced contracts about their code. For example, an invariant that the value of one variable is always less than the value of another</span>, a precondition that an argument to a method call is within a certain range, or a postcondition that <strong>the result of a method call satisfies some condition</strong>.</p>
+		</blockquote>
+		<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+	<h2>What kind of conditions?</h2>
+	<p>That the output is larger than the input (or vice versa?)</p>
+	<pre><code class="language-java" data-trim>
+abstract class Stack&lt;E, N extends Nat&lt;N>> {
+  public Stack&lt;E, Succ&lt;N>> push(E element) {
+    return new StackNode&lt;E, N>(element, this);
+  }
+}
+class EmptyStack&lt;E&gt; extends Stack&lt;E, Zero&gt; { }
+class StackNode&lt;E, N extends Nat&lt;N&gt;&gt; extends Stack&lt;E, Succ&lt;N&gt;&gt; {
+  private final E head;
+  private final Stack&lt;E, N&gt; next;
+  public StackNode(E head, Stack&lt;E, N&gt; next) {
+    this.head = head; this.next = next;
+  }
+  public Stack&lt;E, N&gt; pop() { return next; }
+  public E get() { return head; }
+}
+	</code></pre>
+	</section>
+	<section>
+	<pre><code class="language-java" data-trim>
+class StackOperations {
+  static &lt;E, N extends Nat&lt;N>> Stack&lt;E, N> pop(Stack&lt;E, Succ&lt;N>> stack) {
+    assert stack instanceof StackNode;
+    return ((StackNode)stack).pop();
+  }
+  static &lt;E, N extends Nat&lt;N>> E get(Stack&lt;E, Succ&lt;N>> stack) {
+    assert stack instanceof StackNode;
+    return ((StackNode&lt;E, N>)stack).get();
+  }
+}
+
+class Test2 {
+  public static void main(String[] args) {
+    Stack&lt;String,Zero> zero = new EmptyStack();
+    //StackOperations.pop(zero); //Compile Error
+    //StackOperations.get(zero); //Compile Error
+    
+    Stack&lt;String,Succ&lt;Zero>> one = zero.push("A");
+    StackOperations.get(one);
+    Stack&lt;String,Zero> zeroAgain = StackOperations.pop(one);
+    
+    //StackOperations.get(zeroAgain); //Compile Error
+    //StackOperations.pop(zeroAgain); //Compile Error
+  }
+}
+	</code></pre>
+	</section>
+	<section>
+		<blockquote style="color: hsl(0,0%,60%)">
+			<p>However in general programmers want to express more advanced contracts about their code. For example, an invariant that the value of one variable is always less than the value of another</span>, a precondition that an argument to a method call is within a certain range, or a postcondition that <strong>the result of a method call satisfies some condition</strong>.</p>
+		</blockquote>
+		<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+	</section>
+	<section>
+		<h2>What kind of condition?</h2>
+		<p>That the output lies within a certain range?</p>
+		<svg width="400" height="400" style="width: 50%; float: right;">
+			<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+			<circle cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+			<text x="100" y="150" font-size="60" fill="black">Foo</text>
+			<text x="200" y="300" font-size="60" fill="black">Bar</text>
+		</svg>
+		<p>Again, use subtyping to express this</p>
+	</section>
+</section>
+
+<section>
+	<p>Choosing a language is implicitly choosing a type system.</p>
+	<div class="fragment">
+	<pre><code class="language-java" data-trim>
+Succ&lt;Succ&lt;Succ&lt;Succ&lt;Succ&lt;Succ&lt;Succ&lt;N&gt;&gt;&gt;&gt;&gt;&gt;&gt; seven = ...
+	</code></pre>
+	<p>Writing dependent-type code in a Java sucks.</p>
+	</div>
+	<small class="fragment">It's a <em>little</em> bit better in Scala, but still not great; see&nbsp;<a href="https://github.com/milessabin/shapeless">https://github.com/milessabin/shapeless</a></small>
+</section>
+
+<section>
+	<ul style="list-style-type: none; font-size: 120%; line-height: 120%">
+	<li>&#x1f63b;&nbsp;Preventing bugs via the type systems is awesome.</li>
+	<li class="fragment">&#x1F63F;&nbsp;Fighting an unexpressive type system sucks.</li>
+	<li class="fragment">&#x1F63E;&nbsp;What do we do if we're stuck with an unexpressive type system? <span class="fragment">(Besides rewriting everything from scratch in Scala / Haskell / Agda / Hipster-language-of-the-month?)</span></li>
+	</ul>
+</section>
+
+<section>
+	<blockquote style="color: hsl(0,0%,60%)">
+		<p>However in general <strong>programmers want to express more advanced contracts about their code</strong>. For example, an invariant that the value of one variable is always less than the value of another, a precondition that an argument to a method call is within a certain range, or a postcondition that the result of a method call satisfies some condition.</p>
+	</blockquote>
+	<cite>Erik Meijer and Peter Drayton &mdash; Static Typing Where Possible, Dynamic Typing When Needed</cite>
+</section>
+
+<section>
+	<h2>Bertrand Meyer</h2>
+	<img class="stretch" src="media/800px-Bertrand_Meyer_IMG_2481.jpg" width="800" height="533" />
+	<p><small>Created Design by Contract in 1986-1997, trademarked in 2003-2004.</small></p>
+</section>
+
+<section>
+	<section>
+		<h2>Design by contract</h2>
+		<ul>
+			<li>Preconditions</li>
+			<li>Postconditions</li>
+			<li>Invariants</li>
+		</ul>
+	</section>
+	<section>
+		What it looks like in Eiffel:
+		<pre><code class="language-eiffel">
+	put (x: ELEMENT; key: STRING) is
+	  require
+	    count &lt;= capacity
+	    not key.empty
+	  do
+	    -- Implementation of method here.
+	  ensure
+	    contains(x)
+	    get(key) = x
+	    count = old count + 1
+	  end
+	  </code></pre>
+	</section>
+	<section>
+		<h3>In Scala, use <code>require</code> and <code>ensuring</code></h3>
+		<pre><code class="language-scala">
+	def put(x: Element, key: String) {
+	  require(count &lt;= capacity)
+	  require(! key.empty)
+	  //implementation of method here
+	} ensuring { (result) =>
+	  result.contains(x) &amp;&amp;
+	  result.get(key) == x
+	}
+		</code></pre>
+	</section>
+</section>
+<section>
+	<h2>Various DbC frameworks for Java:</h2>
+	<ul style="-webkit-column-count: 3; -moz-column-count: 3; column-count: 3; list-style-type: none;">
+		<li class="fragment" data-fragment-index="6">Contracts for Java</li>
+		<li class="fragment" data-fragment-index="4">iContract2/JContracts</li>
+		<li class="fragment" data-fragment-index="6">Contract4J</li>
+		<li class="fragment" data-fragment-index="4">jContractor</li>
+		<li class="fragment" data-fragment-index="6">C4J</li>
+		<li class="fragment" data-fragment-index="5">CodePro Analytix</li>
+		<li class="fragment" data-fragment-index="2">STclass</li>
+		<li class="fragment" data-fragment-index="3">Jass preprocessor</li>
+		<li class="fragment" data-fragment-index="5">OVal with AspectJ</li>
+		<li class="fragment" data-fragment-index="5">JML</li>
+		<li class="fragment" data-fragment-index="4">Jtest</li>
+		<li class="fragment" data-fragment-index="4">SpringContracts</li>
+		<li class="fragment" data-fragment-index="3">Modern</li>
+		<li class="fragment" data-fragment-index="5">Custos using AspectJ</li>
+		<li class="fragment" data-fragment-index="2">JavaDbC</li>
+		<li class="fragment" data-fragment-index="5">JavaTESK</li>
+		<li class="fragment" data-fragment-index="3">chex4j using javassist</li>
+		<li class="fragment" data-fragment-index="1">java-on-contracts</li>
+	</ul>
+</section>
+
+<section>
+	<section>
+		<h2>In-line unit tests in D</h2>
+		<pre><code class="language-d" data-trim>
+class Sum {
+  int add(int x, int y) {
+    return x + y;
+  }
+
+  unittest {
+    Sum sum = new Sum;
+    assert(sum.add(3,4) == 7);
+    assert(sum.add(-2,0) == -2);
+  }
+}
+		</code></pre>
+		<cite>http://dlang.org/unittest.html</cite>
+	</section>
+	<section>
+		<h2>Doctest in Python</h2>
+		<pre><code class="language-python" data-trim>
+def list_to_0_index(lst):
+  """
+  Given a list, lst, say for each element the 0-index where it appears for
+  the first time. For example:
+  
+  >>> x = [0, 1, 4, 2, 4, 1, 0, 2]
+  >>> list_to_0_index(x)
+  [0, 1, 2, 3, 2, 1, 0, 3]
+  >>>
+  """
+  return [lst.index(i) for i in lst]
+		</code></pre>
+		<cite>http://en.wikipedia.org/wiki/Doctest</cite>
+	</section>
+</section>
+
+<section>
+	Contracts are declarative
+	<pre><code class="language-java" data-trim>
+/**
+ * @return the sum of x and y, mod Integer.MAX_VALUE.
+ */
+public int add(int x, int y) {
+	</code></pre>
+	Unit tests are specific examples.
+	<pre><code class="language-java" data-trim>
+assertEquals(7, add(3, 4));
+	</code></pre>
+</section>
+
+<section>
+	<ul>
+		<li><strong>Static Type systems</strong> are verified at compile time.</li>
+		<li><strong>Unit tests</strong> are verified at (pseudo-)compile time.</li>
+		<li><strong>"Real" contracts</strong> are verified at runtime, require special tooling.</li>
+		<li><strong>Javadoc contracts</strong> are only verified when a human reads them and thinks about them.</li>
+	</ul>
+</section>
+
+<section>
+	<h2>Barbara Liskov</h2>
+	<img class="stretch" src="media/Turing_Centenary_Celebration_Liskov.jpg" width="1200" height="1500"/>
+</section>
+
+<section>
+	<h2>Liskov Substitution Principle</h2>
+	<blockquote>
+		Let q(x) be a property provable about objects x of type T. Then q(y) should be provable for objects y of type S where S is a subtype of T.
+	</blockquote>
+	<p>In other words, think of types as sets of values, and think of "is a subtype of" as meaning "is a subset of".</p>
+</section>
+
+<section>
+	<h2>Subtyping as Subsets</h2>
+	<svg width="400" height="400" style="width: 50%; float: right;">
+		<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+		<circle class="fragment fade-out" data-fragment-index="1" cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+		<ellipse class="fragment" cx="300" data-fragment-index="1" cy="250" rx="160" ry="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+		<text x="100" y="150" font-size="60" fill="black">Foo</text>
+		<text x="200" y="300" font-size="60" fill="black">Bar</text>
+	</svg>
+	<p>Any property that is true about any instance of <code>Foo</code> should also be true about any instance of <code>Bar</code>, <span class="fragment" data-fragment-index="1">or else <code>Bar</code> is not a subtype/subset of <code>Foo</code>!</span></p>
+</section>
+
+<section>
+	<p>Lots of people get Liskov Substitution Principle wrong.</p>
+	<p class="fragment">I've seen LSP-violations in blogs posts, web tutorials, and published books on OO design.</p>
+	<p class="fragment">I was part of a thread in java-dev@amazon.com just one week ago, where someone got LSP wrong.</p>
+</section>
+
+<section>
+	<h2>Examples of LSP Violations</h2>
+	<h3>Rectangle &amp; Square</h3>
+	<p>A square is a (IS-A) rectangle, Wikipedia says so!</p>
+	<pre><code class="language-java" data-trim>
+public class Rectangle {/*...*/}
+public class Square extends Rectangle {/*...*/}
+
+public void methodExpectingRectangle(Rectangle r) {
+  r.setWidth(3);
+  r.setHeight(7);
+  assertThat(r.getWidth(), is(3));
+  assertThat(r.getHeight(), is(7));
+}
+
+methodExpectingRectangle(new Square(/*...*/));
+	</code></pre>
+</section>
+
+<section>
+	<h2>Examples of LSP Violations</h2>
+	<h3>Rectangle &amp; Square</h3>
+	<p>A rectangle is just a square, with a few other fields and methods, right?</p>
+	<pre><code class="language-java" data-trim>
+public class Square {/*...*/}
+public class Rectangle extends Square {/*...*/}
+
+public void methodExpectedSquare(Square s) {
+  assert "The diagonals of s bisect each other at right angles", //...
+}
+
+methodExpectedSquare(new Rectangle(/*...*/));
+	</code></pre>
+</section>
+
+<section>
+	<h2>Examples of LSP Violations</h2>
+	<p>A mutable list is just an immutable list, but with setters, right?</p>
+	<pre><code class="language-java" data-trim>
+public class ImmutableList { /*...*/}
+public class MutableList extends ImmutableList {
+	public void add(E element) {/*...*/}
+}
+	</code></pre>
+	<p>An immutable list is just a mutable list, whose setters throw <code>UnsupportedOperationException</code>, right?</p>
+	<pre><code class="language-java" data-trim>
+	//see http://docs.oracle.com/javase/7/docs/api/java/util/Collection.html
+	</code></pre>
+	<p>(To be fair, this last one isn't an LSP violation, just a terrible API design.)</p>
+</section>
+
+<section>
+	<section>
+		<h2>How do we fix LSP violations?</h2>
+		<div class="fragment">
+		<blockquote>
+			Let q(x) be a property provable about objects x of type T. Then q(y) should be provable for objects y of type S where S is a subtype of T.
+		</blockquote>
+		<p>Two techniques:</p>
+		</div>
+		<ol>
+		<li class="fragment">Don't have q(x) be a property about objects x of type T.</li>
+		<li class="fragment">Don't have S be a subtype of T.</li>
+		</ol>
+		<div class="fragment">Note: It's okay to have properties q(y) that are true for instances of the subtype which are <strong>not</strong> true for the supertype!</div>
+	</section>
+	<section>
+		<p>Preconditions are contravariant, post-conditions are covariant</p>
+		<p>In other words:</p>
+		<ul>
+			<li>A subtype's preconditions can be weaker than the supertype's.</li>
+			<li>A subtype's postcondition can be stronger than the supertype's.</li>
+		</ul>
+	</section>
+	<section>
+		<h2>Examples</h2>
+		<p>IntAdder: must be given two ints as input. Guarantees output is an int.</p>
+		<ul>
+		<li class="fragment"><strong>RoundingAdder:</strong> must be given two reals as input. Guarantees output is an int. <span class="fragment">OK.</span></li>
+		<li class="fragment"><strong>RealAdder:</strong> must be given two reals as input. Guarantees output is a real. <span class="fragment">WRONG.</span></li>
+		<li class="fragment"><strong>PositiveAdder:</strong> must be given two positive ints as input. Guarantees output is a positive int. <span class="fragment">WRONG.</span></li>
+		<li class="fragment"><strong>AbsoluteAdder:</strong> must be given two ints as input. Guarantees output is a positive int. <span class="fragment">OK.</span></li>
+		<li class="fragment"><strong>NonsenseAdder:</strong> must be given two objects as input. Guarantees output is always -1. <span class="fragment">OK.</span></li>
+		</ul>
+	</section>
+</section>
+
+<section>
+	<h3>Don't have q(x) be a property about objects x of type&nbsp;T</h3>
+	<ul>
+	<li>Don't expose API in a supertype, if that API cannot be implemented by all subtypes.</li>
+	<li>Don't claim something in the contract of a supertype, if that claim is not true in subtypes.</li>
+	</ul>
+</section>
+
+<section>
+	<h3>Don't have S be a subtype of T</h3>
+	<p>Example:</p>
+	<pre><code class="language-java" data-trim>
+/**
+ * Instances might be mutable or immutable
+ */
+abstract class Data { public int get() { /*...*/ } }
+/**
+ * New contract: these instances are guaranteed to be immutable.
+ */
+class ImmutableData { /* No new API defined */ }
+/**
+ * New contract: these instances are guaranteed to be mutable.
+ */
+class MutableData { public void set(int newValue) { /*...*/ } }
+	</code></pre>
+</section>
+
+<section>
+	<p>LSP cannot be verified by static analysis!</p>
+	<small class="fragment">(Proof: let the property q(x) be "always terminates", reduces to halting problem.)</small>
+	<p class="fragment">We (humans) must manually verify LSP.</p>
+	<div class="fragment">
+		<p>We (humans) need to distinguish between implementation details and intended contract.</p>
+		<small>(e.g. "there is no setter" vs "the contract states that instances of this class are immutable")</small>
+	</div>
+	<p class="fragment">Write the contract in the javadoc!</p>
+</section>
+
+<section>
+	<section>
+		<h3>Immutability does not make you immune to LSP</h3>
+		<pre><code class="language-java" data-trim>
+interface ImmutableCircle {
+	float diameter();
+	float area();
+}
+interface ImmutableEllipse extends Circle {
+	float otherDiameter();
+}
+
+ImmutableCircle notReallyACircle = new ImmutableEllipse();
+assert notReallyACircle.area() == &pi; * (notReallyACircle.diameter() / 2) ^ 2
+		</code></pre>
+	</section>
+</section>
+
+<section>
+	<h2>Subtyping as Subsets</h2>
+	<svg width="400" height="400" style="width: 50%; float: right;">
+		<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+		<circle cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+		<text x="100" y="150" font-size="40" fill="black">Rectangles</text>
+		<text x="180" y="270" font-size="40" fill="black">Squares</text>
+	</svg>
+	<p>Wait, why is this diagram&nbsp;wrong?</p>
+	<p class="fragment" style="text-align: left">Types are not <em>just</em> sets of values; they are sets of values, plus the operations that are allowed on those values.</p>
+	<p class="fragment" style="text-align: left">Liskov is all about the <em>properties</em> of the elements, not the elements themselves. I.e. Liskov is all about the contract.</p>
+</section>
+
+<!--
+<section>
+	<section>
+		<h2>Worked Example</h2>
+		<p><code>String</code> and <code>HtmlString</code></p>
+		<small>(Imagine it's our own com.amazon.String class that we're designing from scratch, not the pre-existing java.lang.String)</small>
+	</section>
+	<section>
+		<h2>Motivation:</h2>
+		<p>Imagine we're writing a indie publishing website where authors can submit info about books they've written.</p>
+		<p>The authors will invoke our API, sending us a com.amazon.String, and we need to store this string in our DB.</p>
+		<p>Later on, readers will come to our website, and we need to show them a list of books from our DB as an HTML document.</p>
+	</section>
+	<section>
+		<h2>Example use-case:</h2>
+		<p>Author sends us <code style="background:#AAA">Hamlet</code>, we store that in our DB.</p>
+		<p>Reader requests list of books, we send <code style="background:#AAA">&lt;ul&gt;&lt;li&gt;Hamlet&lt;/li&gt;&lt;ul&gt;</code>.</p>
+	</section>
+	<section>
+		<h2>Questions</h2>
+		<ul>
+			<li>What types do we need? What operations do they have?</li>
+			<li>What's the signature for a store() and fetch() method on the DB?</li>
+			<li>What's the signature for a sendToHtmlUserAgent() method?</li>
+		</ul>
+	</section>
+	<section>
+		<h2>Suddenly, HTML becomes very popular among authors!</h2>
+		<p class="fragment">An author sends us a new book title: <code style="background:#AAA">&lt;b&gt; is my Favorite HTML Element</code>.
+		<p class="fragment">It's a best-seller!</p>
+		<p class="fragment">3 months later, the author sends us <code style="background:#AAA">&amp;lt;b&amp;gt; is my Favorite Way to Escape &ldquo;&lt;b&gt;&rdquo; &mdash; the sequel to the award winning book &ldquo;&lt;b&gt; is my Favorite HTML Element&rdquo;</code>.</p>
+	</section>
+	<section>
+		<h2>Now what?</h2>
+		<ul>
+			<li>What types do we need? What operations do they have?</li>
+			<li>What's the signature for a store() and fetch() method on the DB?</li>
+			<li>What's the signature for a sendToHtmlUserAgent() method?</li>
+		</ul>
+	</section>
+	<section>
+		<h3>You've partnered with another publisher!</h3>
+		<p>They have their own DB and they want their books to appear on your page.</p>
+		<p>Unfortunately, they've stored the titles as already-HTML encoded.</p>
+		<small>(e.g. a book named <code style="background:#AAA">This way --&gt; lies madness</code> will be sent to you as <code style="background:#AAA">This way --&amp;gt; lies madness</code> when you query their systems.)</small>
+		<p>How do you integrate it with your system?</p>
+	</section>
+	<section>
+		<ul>
+			<li>What if our team grows so large, we can no longer do one-on-one training/ramp-up for architectural design goals?</li>
+			<li class="fragment">Hint: Use type system to encode contract, so other devs will get a compile error if they unknowingly try to violate the contract of the methods.</li>
+			<li class="fragment">Hint: The name of this worked example is &ldquo;<code>String</code> and <code>HtmlString</code>&rdquo;.</li>
+		</ul>
+	</section>
+	<section>
+		<svg width="400" height="400" style="width: 50%; float: right;">
+			<circle cx="200" cy="200" r="160" stroke="rgba(0,128,0,1)" stroke-width="4" fill="rgba(0,128,0,0.5)"/>
+			<circle cx="250" cy="250" r="80" stroke="rgba(128,128,0,1)" stroke-width="4" fill="rgba(128,128,0,0.5)"/>
+			<text x="100" y="150" font-size="30" fill="black">Any String</text>
+			<text x="180" y="250" font-size="30" width="100" fill="black">Html String</text>
+		</svg>
+		<p>Note that {<span style="font-size: 66%">the set of all valid HTML strings</span>} is a strict subset of {<span style="font-size: 66%">the set of all valid&nbsp;strings</span>}.</p>
+		<p class="fragment">So should <code>HtmlString</code> be a subtype of <code>String</code>?</p>
+	</section>
+	<section>
+		<p>The other teams at your company think your new "<code>String</code>" data structure is an amazing way to represent textual data, and wish to use it for their own projects.</p>
+		<p>They request that you add new functionality to it like <code>toUpperCase()</code> and <code>length()</code>. How do you do it?</p>
+	</section>
+	<section>
+		<p>A team at your company is working on a new social network&mdash;Tweeter.com&mdash; that lets you write fully HTML formatterd posts, as long as they do not exceed 140 visible text characters.</p>
+		<p class="fragment">(Most users just post Internet meme pictures, and so their post-lengths are actually 0 visible text characters).</p>
+		<p class="fragment">They use your new <code>HtmlString.length()</code> method to implement it. Are they going to file a bug report to you? If so, will you be able to fix it?</p>
+	</section>
+	<section>
+		<h2>Remember this slide?</h2>
+		<blockquote>
+			Definition: a <strong>type</strong> is a set of values.
+		</blockquote>
+		<cite>http://www-plan.cs.colorado.edu/diwan/3155-f04/TypeChecking.pdf</cite>
+		<div class="fragment">
+			<blockquote>A type is a set of values&hellip; and the set of operations allowed on those values.</blockquote>
+			<cite>me</cite>
+		</div>
+		<div><small>(We'll also get back to this later).</small></div>
+	</section>
+	<section>
+		<p>Adding a new operation to a type hierarchy can cause you to "retroactively" break Liskov subtyping.</p>
+	</section>
+</section>
+-->
+
+<section>
+	<h2>Takeaway points</h2>
+	<ul>
+		<li>Bugs happen when the code doesn't do what you expect.</li>
+		<li class="fragment">Use the type system to force the code to do what you expect.</li>
+		<li class="fragment">Use the type system to force you to expect what the code&nbsp;does.</li>
+		<li class="fragment">If the type system can't (easily) express your contract, use&nbsp;contracts.</li>
+		<li class="fragment">Use LSP to make sure nobody's expectations are being&nbsp;violated.</li>
+		<li class="fragment">No static analysis tool can verify LSP for you.</li>
+		<li class="fragment">You need manual, human verification.</li>
+	</ul>
+</section>
+
+<section>
+Images used with permission:
+<ul>
+<li>Mars Climate Orbiter: Public Domain, by NASA</li>
+<li>Mars Climate Orbiter Trajectory: CC BY 3.0, by Xession</li>
+<li>Challenge Accepted: Public Domain</li>
+<li>Bertrand Meyer: CC BY-SA 3.0, by David.Monniaux</li>
+<li>Barbara Liskov: CC BY 2.0, by Dennis Hamilton</li>
+</ul>
+</section>
+<!--
+<section>
+	<blockquote>
+		<p>The explicit definition of these "assertions" forces the designer to think deeply about what is a requirement of the specification and what is an artifact of a particular implementation. These assertions can and should influence the declaration of "throws" exceptions as well as the throwing of runtime exceptions and try/catch in general.</p>
+		<p>For example if a method has specified some pre-condition then the failure of that condition is the responsibility of the client of the method. The method should not have to declare a checked exception for that condition, it should not have to test and throw for that condition, and likewise the client should not have to try/catch for that condition.</p>
+	</blockquote>
+	<cite>http://c2.com/cgi/wiki?DesignByContract</cite>
+</section>
+
+<section>
+	<blockquote>
+		<p>Every method has a pre-condition and a post-condition whether you specify it or not. Why would you not specify it?</p>
+		<p>At a minimum their specification even as comments improves code because it tells you what the client should make true before using it, and exactly what it can expect to be true afterwards.</p>
+		<p>Why would maintaining the definition of a method increase maintenance costs over and above not maintaining the definition of a method? Is guessing cheaper than knowing?</p>
+	</blockquote>
+	<cite>http://c2.com/cgi/wiki?DesignByContract</cite>
+</section>
+
+<section>
+	<blockquote>
+		<p>I see assertions as a poor man's program prover [&hellip;]. Although in Eiffel they are imperative, that's only because of limitations of that technology. We should try to think of a precondition like "x > 0" as meaning x is always positive; not just that this particular x is.</p>
+		<p>So, assertions are declarative while UnitTests are imperative. Assertions are for static reasoning about code while UnitTests are for dynamically testing a few examples. You need both. They complement each other.</p>
+	</blockquote>
+	<cite>DaveHarris, http://c2.com/cgi/wiki?DesignByContract</cite>
+</section>
+-->
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.min.js"></script>
+
+		<script>
+
+			// Full list of configuration options available here:
+			// https://github.com/hakimel/reveal.js#configuration
+			Reveal.initialize({
+				controls: true,
+				progress: true,
+				history: true,
+				keyboard: true,
+				overview: true,
+				center: true,
+				slideNumber: true,
+
+				transition: 'linear',
+
+				// Parallax scrolling
+				// parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+				// parallaxBackgroundSize: '2100px 900px',
+
+				// Optional libraries used to extend on reveal.js
+				dependencies: [
+					{ src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+					{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+					{ src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+					{ src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+					{ src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+				]
+			});
+
+		</script>
+
+	</body>
+</html>
